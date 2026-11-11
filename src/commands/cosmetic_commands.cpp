@@ -342,45 +342,22 @@ namespace studio
                 const char *prefix;
             };
             static constexpr PrefixRule rules[] = {
-                {"Body", "own_custbody"},
-                {"Bottom (Deck Graphic)", "own_deckgraphic"},
-                {"Bottoms (Pants)", "own_bottom"},
-                {"Eyes", "own_custeye"},
-                {"Eyebrows / Facial Hair", "own_custhair"},
-                {"Eyewear", "own_eyewearglasses"},
-                {"Facial Hair Color", "own_facialhaircolor"},
-                {"Costume", "own_costume"},
-                {"Griptape", "own_deckgripcolor"},
-                {"Griptape", "dev_sb_deck_gripcolor_anim"},
-                {"Grip Cutout", "own_deckgripcutout"},
-                {"Hair Color", "own_custscalp"},
-                {"Hair Color", "dev_own_custhair"},
-                {"Hats", "own_headwear"},
-                {"Hats", "own_mask"},
-                {"Heads", "own_custhead"},
-                {"Left Hand", "own_handwearglove"},
-                {"Lipstick", "own_lipcolor"},
-                {"Lipstick Style", "own_lipstyle"},
-                {"Makeup", "own_makeup"},
-                {"Moles", "own_moles"},
-                {"Mouths", "own_custmouth"},
-                {"Noses", "own_custnose"},
-                {"Outfits", "own_outfit"},
-                {"Outfits", "own_topdress"},
-                {"Playercard Backgrounds", "own_pcard_bg"},
-                {"Playercard Icons", "own_pcard_icon"},
-                {"Shoes", "own_shoe"},
-                {"Skins", "own_custskintype"},
-                {"Socks", "own_sock"},
-                {"Sticker", "own_sticker"},
-                {"Stubble", "own_stubble"},
-                {"Tattoos", "own_tattooflash"},
-                {"Tops", "own_top"},
-                {"Trucks", "own_truck"},
-                {"Voices", "own_voicetype"},
-                {"Wheels", "own_wheel"},
-                {"Wheels", "own_sb_deck_wheel"},
-                {"Scalps", "own_custhairscalp"},
+                {"Body", "own_custbody"}, {"Bottom (Deck Graphic)", "own_deckgraphic"},
+                {"Bottoms (Pants)", "own_bottom"}, {"Eyes", "own_custeye"},
+                {"Eyebrows / Facial Hair", "own_custhair"}, {"Eyewear", "own_eyewearglasses"},
+                {"Facial Hair Color", "own_facialhaircolor"}, {"Costume", "own_costume"},
+                {"Griptape", "own_deckgripcolor"}, {"Griptape", "dev_sb_deck_gripcolor_anim"},
+                {"Grip Cutout", "own_deckgripcutout"}, {"Hair Color", "own_custscalp"},
+                {"Hair Color", "dev_own_custhair"}, {"Hats", "own_headwear"}, {"Hats", "own_mask"},
+                {"Heads", "own_custhead"}, {"Left Hand", "own_handwearglove"},
+                {"Lipstick", "own_lipcolor"}, {"Lipstick Style", "own_lipstyle"},
+                {"Makeup", "own_makeup"}, {"Moles", "own_moles"}, {"Mouths", "own_custmouth"},
+                {"Noses", "own_custnose"}, {"Outfits", "own_outfit"}, {"Outfits", "own_topdress"},
+                {"Playercard Backgrounds", "own_pcard_bg"}, {"Playercard Icons", "own_pcard_icon"},
+                {"Shoes", "own_shoe"}, {"Skins", "own_custskintype"}, {"Socks", "own_sock"},
+                {"Sticker", "own_sticker"}, {"Stubble", "own_stubble"}, {"Tattoos", "own_tattooflash"},
+                {"Tops", "own_top"}, {"Trucks", "own_truck"}, {"Voices", "own_voicetype"},
+                {"Wheels", "own_wheel"}, {"Wheels", "own_sb_deck_wheel"}, {"Scalps", "own_custhairscalp"},
             };
 
             const fs::path root = checked_game_root(c, a);
@@ -388,75 +365,180 @@ namespace studio
             const auto index = native::build_index(c, root, false, &from_cache);
             const auto files = native::game_files(root);
 
-            Json items = Json::array();
-            Json counts = Json::object();
-            std::size_t matched = 0;
-            std::size_t decoded = 0;
-            c.progress(-1, "Finding cosmetic items in the native asset index");
+            auto prefix_for = [&](const native::Entry &entry) -> const PrefixRule *
+            {
+                const auto name = index->lower_name(entry);
+                const auto slash = name.find_last_of('/');
+                const auto leaf = slash == std::string_view::npos ? name : name.substr(slash + 1);
+                const PrefixRule *best = nullptr;
+                for (const auto &rule : rules)
+                    if (leaf.starts_with(rule.prefix) &&
+                        (!best || std::char_traits<char>::length(rule.prefix) >
+                                      std::char_traits<char>::length(best->prefix)))
+                        best = &rule;
+                return best;
+            };
+            auto is_base_item = [&](const native::Entry &entry)
+            {
+                return lower(index->type_name(entry)).find("delmarbaseitemasset") != std::string::npos;
+            };
+
+            struct Decoded
+            {
+                const native::Entry *entry = nullptr;
+                Json ebx;
+                std::vector<std::string> imports;
+                std::string error;
+                const PrefixRule *rule = nullptr;
+                bool base = false;
+            };
+            std::vector<Decoded> decoded_assets;
+            std::unordered_map<std::string, std::size_t> by_name;
+            std::size_t matched_ebx = 0, decoded_count = 0;
+            c.progress(-1, "Finding base items and cosmetic assets in the native index");
 
             for (const auto &entry : index->entries)
             {
                 if (entry.kind != native::Kind::ebx)
                     continue;
-
-                const std::string_view name = index->lower_name(entry);
-                const std::size_t slash = name.find_last_of('/');
-                const std::string_view leaf = slash == std::string_view::npos ? name : name.substr(slash + 1);
-                const PrefixRule *rule = nullptr;
-                // Prefer the most specific prefix where one prefix is the start of another.
-                for (const auto &candidate : rules)
-                {
-                    if (leaf.starts_with(candidate.prefix) &&
-                        (!rule || std::char_traits<char>::length(candidate.prefix) >
-                                      std::char_traits<char>::length(rule->prefix)))
-                        rule = &candidate;
-                }
-                if (!rule)
+                const auto *rule = prefix_for(entry);
+                const bool base = is_base_item(entry);
+                if (!rule && !base)
                     continue;
+                ++matched_ebx;
+                if ((matched_ebx % 100) == 0)
+                    c.progress(-1, "Reading cosmetic EBX data: " + std::to_string(matched_ebx));
 
-                ++matched;
-                if ((matched % 100) == 0)
-                    c.progress(-1, "Reading cosmetic EBX references: " + std::to_string(matched));
-
-                native::fb::Guid guid;
-                guid.bytes = entry.guid;
-                Json references = Json::array();
-                std::string read_error;
+                Decoded item;
+                item.entry = &entry;
+                item.rule = rule;
+                item.base = base;
                 try
                 {
-                    const Json ebx = native::ebx_json(*index, entry, *files, {});
+                    item.ebx = native::ebx_json(*index, entry, *files, {});
                     std::set<std::string> seen;
-                    for (const auto &import : ebx.value("imports", Json::array()))
+                    for (const auto &import : item.ebx.value("imports", Json::array()))
                     {
-                        const std::string target = import.value("asset", "");
+                        const auto target = import.value("asset", "");
                         if (!target.empty() && seen.insert(target).second)
-                            references.push_back(target);
+                            item.imports.push_back(target);
                     }
-                    ++decoded;
+                    ++decoded_count;
                 }
                 catch (const std::exception &error)
                 {
-                    read_error = error.what();
+                    item.error = error.what();
                 }
-
-                const std::string category = rule->category;
-                const auto count = counts.value(category, 0);
-                counts[category] = count + 1;
-                Json item = {{"item", std::string(index->name(entry))},
-                             {"slot", category},
-                             {"status", read_error.empty() ? "ok" : "fail"},
-                             {"type", index->type_name(entry)},
-                             {"guid", guid.string()},
-                             {"prefix", rule->prefix},
-                             {"references", std::move(references)}};
-                if (!read_error.empty())
-                    item["reference_error"] = read_error;
-                items.push_back(std::move(item));
+                by_name.emplace(std::string(index->name(entry)), decoded_assets.size());
+                decoded_assets.push_back(std::move(item));
             }
 
-            return {{"total", items.size()},
-                    {"matched_ebx", matched},
-                    {"decoded_ebx", decoded},
+            auto category_for = [&](const Decoded &item)
+            {
+                if (item.rule)
+                    return std::string(item.rule->category);
+                // Base-item names are not guaranteed to use the cosmetic prefix. Infer from directly
+                // referenced category-prefixed EBXs when possible; otherwise preserve the unknown value.
+                for (const auto &name : item.imports)
+                    if (const auto found = by_name.find(name); found != by_name.end())
+                        if (const auto *rule = decoded_assets[found->second].rule)
+                            return std::string(rule->category);
+                return std::string("Uncategorized");
+            };
+
+            Json items = Json::array();
+            Json counts = Json::object();
+            std::set<std::string> assigned;
+            std::size_t cosmetic_count = 0;
+
+            // A base item is the cosmetic identity. Its direct EBX imports are attached to the same
+            // record; category-prefixed assets that import the base item are attached as well.
+            for (const auto &base : decoded_assets)
+            {
+                if (!base.base)
+                    continue;
+                const std::string base_name(index->name(*base.entry));
+                Json assets = Json::array();
+                std::set<std::string> asset_names;
+                asset_names.insert(base_name);
+                for (const auto &name : base.imports)
+                    if (by_name.contains(name))
+                        asset_names.insert(name);
+                for (const auto &candidate : decoded_assets)
+                    if (candidate.rule &&
+                        std::find(candidate.imports.begin(), candidate.imports.end(), base_name) != candidate.imports.end())
+                        asset_names.insert(std::string(index->name(*candidate.entry)));
+
+                for (const auto &name : asset_names)
+                {
+                    assigned.insert(name);
+                    const auto found = by_name.find(name);
+                    if (found == by_name.end())
+                        continue;
+                    const auto &asset = decoded_assets[found->second];
+                    native::fb::Guid guid;
+                    guid.bytes = asset.entry->guid;
+                    Json record = {{"name", name},
+                                   {"kind", "ebx"},
+                                   {"guid", guid.string()},
+                                   {"type", index->type_name(*asset.entry)},
+                                   {"status", asset.error.empty() ? "ok" : "fail"}};
+                    if (!asset.error.empty())
+                        record["error"] = asset.error;
+                    assets.push_back(std::move(record));
+                }
+
+                native::fb::Guid guid;
+                guid.bytes = base.entry->guid;
+                const std::string category = category_for(base);
+                Json cosmetic = {{"item", base_name},
+                                 {"slot", category},
+                                 {"status", base.error.empty() ? "ok" : "fail"},
+                                 {"type", index->type_name(*base.entry)},
+                                 {"guid", guid.string()},
+                                 {"base_item", base_name},
+                                 {"assets", std::move(assets)},
+                                 {"references", base.imports}};
+                if (!base.error.empty())
+                    cosmetic["reference_error"] = base.error;
+                items.push_back(std::move(cosmetic));
+                ++cosmetic_count;
+                counts[category] = counts.value(category, 0) + 1;
+            }
+
+            // Keep prefix-discovered assets that are not linked to a discovered base item as
+            // standalone fallback records. This makes incomplete or older asset sets visible.
+            for (const auto &asset : decoded_assets)
+            {
+                if (!asset.rule || assigned.contains(std::string(index->name(*asset.entry))))
+                    continue;
+                native::fb::Guid guid;
+                guid.bytes = asset.entry->guid;
+                const std::string name(index->name(*asset.entry));
+                Json assets = Json::array({{{"name", name},
+                                            {"kind", "ebx"},
+                                            {"guid", guid.string()},
+                                            {"type", index->type_name(*asset.entry)},
+                                            {"status", asset.error.empty() ? "ok" : "fail"}}});
+                Json cosmetic = {{"item", name},
+                                 {"slot", asset.rule->category},
+                                 {"status", asset.error.empty() ? "ok" : "fail"},
+                                 {"type", index->type_name(*asset.entry)},
+                                 {"guid", guid.string()},
+                                 {"prefix", asset.rule->prefix},
+                                 {"assets", std::move(assets)},
+                                 {"references", asset.imports},
+                                 {"fallback", true}};
+                if (!asset.error.empty())
+                    cosmetic["reference_error"] = asset.error;
+                items.push_back(std::move(cosmetic));
+                ++cosmetic_count;
+                counts[asset.rule->category] = counts.value(asset.rule->category, 0) + 1;
+            }
+
+            return {{"total", cosmetic_count},
+                    {"matched_ebx", matched_ebx},
+                    {"decoded_ebx", decoded_count},
                     {"index_cached", from_cache},
                     {"counts", std::move(counts)},
                     {"items", std::move(items)}};

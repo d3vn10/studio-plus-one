@@ -334,6 +334,7 @@ namespace studio::gui
             std::shared_ptr<Job> index;
             Json index_result;
             bool ready = false;
+            bool refreshing_index = false;
             std::string index_error, index_error_code;
 
             std::string query, searched;
@@ -644,9 +645,15 @@ namespace studio::gui
                     g.index_error.clear();
                     reset_tree();
                     g.types_job = run("asset", "types", Json::object());
+                    if (g.refreshing_index)
+                    {
+                        g.refreshing_index = false;
+                        cosmetics_asset_index_refreshed();
+                    }
                 }
                 else
                 {
+                    g.refreshing_index = false;
                     g.index_error = error_text(out);
                     g.index_error_code = out.contains("error") ? out["error"].value("code", "") : "";
                 }
@@ -1238,6 +1245,7 @@ namespace studio::gui
             if (ImGui::Button("REBUILD INDEX", ImVec2(button, 0)))
             {
                 g.ready = false;
+                g.refreshing_index = true;
                 g.index = run("asset", "index", {{"refresh", true}});
             }
             if (ImGui::IsItemHovered())
@@ -2199,6 +2207,35 @@ namespace studio::gui
     void assets_startup(const Json &args)
     {
         g.startup = args.is_object() ? args : Json::object();
+    }
+
+    void assets_index_refreshed()
+    {
+        if (!g.started)
+            return;
+
+        if (g.index && !g.index->done.load())
+            g.index->cancel = true;
+        for (auto &[path, folder] : g.folders)
+            if (folder.job && !folder.job->done.load())
+                folder.job->cancel = true;
+        if (g.search && !g.search->done.load())
+            g.search->cancel = true;
+        if (g.types_job && !g.types_job->done.load())
+            g.types_job->cancel = true;
+
+        g.ready = false;
+        g.refreshing_index = false;
+        g.index_result = Json::object();
+        g.index_error.clear();
+        g.index_error_code.clear();
+        g.folders.clear();
+        g.rows.clear();
+        g.types.clear();
+        g.results.clear();
+        g.result_total = 0;
+        g.search_error.clear();
+        g.index = run("asset", "index", Json::object());
     }
 
     void assets_page(App &app)

@@ -10,6 +10,7 @@
 #include "gui/page_kit.h"
 #include "gui/project_page.h"
 #include "gui/widgets.h"
+#include "gui/jobs.h"
 
 #include <shellapi.h>
 
@@ -56,7 +57,7 @@ namespace studio::gui
             int show_frames = 0;
 
             // browse
-            std::shared_ptr<Job> list, audit;
+            std::shared_ptr<Job> list, audit, catalog;
             bool audit_taken = false;
             std::vector<Item> items;
             std::vector<std::string> slots;
@@ -100,20 +101,20 @@ namespace studio::gui
         void take_audit()
         {
             auto &s = g_cos;
-            if (s.audit_taken || !kit::succeeded(s.audit))
+            if (s.audit_taken || !kit::succeeded(s.catalog))
                 return;
             s.audit_taken = true;
             s.items.clear();
             std::set<std::string> slots;
-            const Json r = kit::result(s.audit);
+            const Json r = kit::result(s.catalog);
             for (const auto &i : r.value("items", Json::array()))
             {
                 Item it;
                 it.item = i.value("item", "");
                 it.slot = i.value("slot", "");
-                it.status = i.value("status", "");
+                it.status = i.value("status", "ok");
                 it.texture = i.value("texture", "");
-                it.reason = i.value("reason", "");
+                it.reason = i.value("reference_error", "");
                 it.details = i;
                 slots.insert(it.slot);
                 s.items.push_back(std::move(it));
@@ -221,7 +222,7 @@ namespace studio::gui
             if (s.started)
                 return;
             s.started = true;
-            s.list = kit::run("cosmetic", "list", Json::object()); // quick (about 3 s): counts and preview targets
+            s.catalog = kit::run("cosmetic", "catalog", Json::object());
             const Json &a = s.startup;
             const std::string view = a.value("view", "");
             if (view == "new")
@@ -260,7 +261,7 @@ namespace studio::gui
             if (!s.startup_run)
                 return;
             if (s.view == View::browse)
-                s.audit = kit::run("cosmetic", "audit", Json::object());
+                s.catalog = kit::run("cosmetic", "catalog", Json::object());
             if (s.view == View::replace)
             {
                 read_mesh();
@@ -291,24 +292,15 @@ namespace studio::gui
         void catalog_summary()
         {
             auto &s = g_cos;
-            const Json r = kit::result(s.list);
+            const Json r = kit::result(s.catalog);
             if (!r.is_object())
             {
-                kit::status(s.list, "Read the catalog");
+                kit::status(s.catalog, "Read the native catalog");
                 return;
             }
-            const Json &counts = r.value("counts", Json::object());
-            const Json &board = r.value("board_preview", Json::object());
-            if (ImGui::BeginTable("##counts", 3, ImGuiTableFlags_SizingStretchSame))
-            {
-                ImGui::TableNextColumn();
-                field("COSMETICS", kit::thousands(counts.value("cosmetics", 0LL)));
-                ImGui::TableNextColumn();
-                field("BOARD COSMETICS", kit::thousands(counts.value("board_cosmetics", 0LL)));
-                ImGui::TableNextColumn();
-                field("PREVIEW BOARD MESH", kit::leaf(board.value("mesh", "")));
-                ImGui::EndTable();
-            }
+            field("MATCHED ITEMS", kit::thousands(r.value("total", 0LL)));
+            field("EBX DECODED", kit::thousands(r.value("decoded_ebx", 0LL)));
+            field("INDEX", r.value("index_cached", false) ? "Cached" : "Built / refreshed");
         }
 
         void browse_view()
@@ -320,17 +312,17 @@ namespace studio::gui
             catalog_summary();
             if (s.items.empty())
             {
-                kit::muted("LOAD ALL COSMETICS walks every cosmetic in the game with its slot, preview status and "
-                           "texture. It takes "
-                           "about a minute; the list stays here while Studio+ is open.");
-                ImGui::BeginDisabled(kit::running(s.audit));
-                if (primary_button("LOAD ALL COSMETICS"))
+                kit::muted("This catalog reads EBX assets from the native TOC index, matches known item-name prefixes "
+                           "and follows imported GUIDs to related assets. It does not run the old cosmetic "
+                           "audit or test previewability.");
+                ImGui::BeginDisabled(kit::running(s.catalog));
+                if (primary_button("LOAD COSMETICS"))
                 {
-                    s.audit = kit::run("cosmetic", "audit", Json::object());
+                    s.catalog = kit::run("cosmetic", "catalog", Json::object());
                     s.audit_taken = false;
                 }
                 ImGui::EndDisabled();
-                kit::status(s.audit, "Loaded");
+                kit::status(s.catalog, "Loaded");
                 end_tile();
                 return;
             }
@@ -349,7 +341,7 @@ namespace studio::gui
                 ImGui::EndCombo();
             }
             ImGui::SameLine();
-            const char *statuses[] = {"Every status", "Previewable", "Not previewable"};
+            const char *statuses[] = {"Every status", "References read", "Reference read failed"};
             ImGui::SetNextItemWidth(S(170));
             ImGui::Combo("##status", &s.filter_status, statuses, 3);
             ImGui::SameLine();
@@ -359,7 +351,7 @@ namespace studio::gui
             ImGui::SameLine();
             if (ImGui::Button("RELOAD"))
             {
-                s.audit = kit::run("cosmetic", "audit", Json::object());
+                s.catalog = kit::run("cosmetic", "catalog", Json::object());
                 s.audit_taken = false;
                 s.items.clear();
             }
@@ -439,9 +431,7 @@ namespace studio::gui
                     sel = &it;
             if (!sel)
             {
-                kit::muted("Pick a cosmetic to see its details. A clothing or costume item can be the donor of a NEW "
-                           "COSMETIC; "
-                           "deck, wheel and grip items share one mesh, so change those with REPLACE A GAME MESH.");
+                kit::muted("Pick an item to inspect its EBX GUID and imported asset references.");
             }
             else
             {
@@ -452,15 +442,19 @@ namespace studio::gui
                     field("MAIN TEXTURE", sel->texture);
                 if (sel->status == "ok")
                 {
-                    field("SECTIONS / MATERIALS",
-                          std::to_string(sel->details.value("sections", 0)) + " / " +
-                              std::to_string(sel->details.value("materials", 0)));
-                    for (const auto &w : sel->details.value("warning_messages", Json::array()))
-                        kit::coloured(w.get<std::string>(), color::warning);
+                    field("EBX TYPE", sel->details.value("type", ""));
+                    field("FILE GUID", sel->details.value("guid", ""));
+                    field("MATCHED PREFIX", sel->details.value("prefix", ""));
+                    const Json references = sel->details.value("references", Json::array());
+                    field("IMPORTED ASSETS", std::to_string(references.size()));
+                    for (const auto &reference : references)
+                        ImGui::BulletText("%s", reference.get<std::string>().c_str());
                 }
                 else
                 {
-                    field("NOT PREVIEWABLE", sel->reason);
+                    field("EBX TYPE", sel->details.value("type", ""));
+                    field("FILE GUID", sel->details.value("guid", ""));
+                    field("REFERENCE READ ERROR", sel->reason);
                 }
                 ImGui::Spacing();
                 if (board_slot(sel->slot))

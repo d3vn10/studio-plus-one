@@ -12,6 +12,9 @@ namespace studio::gui
 
     void assets_page(App &app);
 
+    // The shared native index was rebuilt by another page; reload this page's cached tree and summary.
+    void assets_index_refreshed();
+
     // Startup options for scripts and screenshots, given with --page assets:
     //   --arg search=<text>  --arg kind=all|ebx|res|chunk  --arg category=<group>  --arg type=<type name>
     //   --arg open=<folder>[;<folder>...]  --arg select=<asset name>  --arg select-kind=ebx|res|chunk

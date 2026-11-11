@@ -331,7 +331,6 @@ namespace studio::gui
                     s.audit_taken = false;
                 }
                 ImGui::EndDisabled();
-                kit::status(s.catalog, "Loaded");
                 end_tile();
                 return;
             }

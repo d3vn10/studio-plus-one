@@ -11,6 +11,9 @@ namespace studio::gui
 
     void cosmetics_page(App &app);
 
+    // The Assets page rebuilt the shared native index; refresh the cosmetics catalog if it is active.
+    void cosmetics_asset_index_refreshed();
+
     // Startup options for scripts and screenshots, given with --page cosmetics:
     //   --arg view=browse|new|part|replace|costume  --arg text=<filter>  --arg slot=<slot>
     //   --arg mesh=<game mesh>  --arg model=<.glb|.fbx>  --arg output=<.fbproject|.fbmod>  --arg hide=deck-parts

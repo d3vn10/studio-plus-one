@@ -5,16 +5,17 @@
 // asset lua-source, asset export-raw) run on the job system.
 #include "core/registry.h"
 
-namespace studio::gui {
+namespace studio::gui
+{
 
-struct App;
+    struct App;
 
-void assets_page(App& app);
+    void assets_page(App &app);
 
-// Startup options for scripts and screenshots, given with --page assets:
-//   --arg search=<text>  --arg kind=all|ebx|res|chunk  --arg category=<group>  --arg type=<type name>
-//   --arg open=<folder>[;<folder>...]  --arg select=<asset name>  --arg select-kind=ebx|res|chunk
-//   --arg tab=properties|texture|lua|info  --arg edit=<field path>=<value> (a draft change; give it more than once)
-void assets_startup(const Json& args);
+    // Startup options for scripts and screenshots, given with --page assets:
+    //   --arg search=<text>  --arg kind=all|ebx|res|chunk  --arg category=<group>  --arg type=<type name>
+    //   --arg open=<folder>[;<folder>...]  --arg select=<asset name>  --arg select-kind=ebx|res|chunk
+    //   --arg tab=properties|texture|lua|info  --arg edit=<field path>=<value> (a draft change; give it more than once)
+    void assets_startup(const Json &args);
 
 } // namespace studio::gui

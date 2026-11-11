@@ -4,7 +4,8 @@
 
 #include <windows.h>
 
-int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
+{
     studio::register_all_commands();
     return studio::gui::run_app();
 }

@@ -171,7 +171,7 @@
   - `cosmetics.bin`
   - `CosmeticThumbnails\`
   - the shader usage index (in memory, per asset database)
-- `Builds\Project\CurrentProject.fbmod` plus `Builds\Project\Stage\Patch\…` (layout.toc, initfs_win32, Win32 tocs and cas). Marker files are `.reskate-studio-staging` and `Patch\.reskate-studio-patch` (contains `skate_sha256=`). `Builds\Maps`, `Builds\Mods`, `Imports`, `shaders-disassembly`, `ReSkateStudio\MediaWork` (temporary WebM and WAV).
+- `Builds\Project\CurrentProject.fbmod` plus `Builds\Project\Stage\Patch\…` (staged `layout.toc`, `initfs_win32`, Win32 TOCs and CAS files). `Patch` is only the staging container: deployment copies its contents into `Mods\<name>`, where `layout.toc` and the optional `.reskate-studio-patch` provenance file are at the mod root. The marker records the Skate.exe SHA-256; it does not enumerate mod contents. Other folders include `Builds\Maps`, `Builds\Mods`, `Imports`, `shaders-disassembly`, and `ReSkateStudio\MediaWork` (temporary WebM and WAV).
 - Map import output folder: `.reskate-studio-map-import` marker, `.import-lock`, `.pending`, `.previous`, `.building-*`, `map.json`, `conversion-report.json`, `result.json`, `map_image.json`.
 - Files written into the game folder:
   - `Mods\<name>\` with `reskate-build.json` (schema, tool, version, map, built) and `reskate-levels.json`

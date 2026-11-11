@@ -61,6 +61,7 @@ add_library(studio_core STATIC
     src/native/gltf.cpp
     src/native/mesh_set.cpp
     src/native/mod_files.cpp
+    src/native/mod_dump.cpp
 )
 target_include_directories(studio_core PUBLIC src ${CMAKE_BINARY_DIR}/generated)
 target_link_libraries(studio_core PUBLIC studio_third_party studio_reskate shell32 advapi32 ole32)
@@ -116,7 +117,7 @@ add_executable(studio-plus-gui WIN32
     ${CMAKE_BINARY_DIR}/generated/studio_gui.rc
 )
 target_link_libraries(studio-plus-gui PRIVATE studio_core studio_imgui windowscodecs uuid)
-set_target_properties(studio-plus-gui PROPERTIES OUTPUT_NAME "ReSkate Studio+")
+set_target_properties(studio-plus-gui PROPERTIES OUTPUT_NAME "ReSkate+ Studio")
 # The .rc embeds these, so a changed font or icon rebuilds it.
 set_source_files_properties(${CMAKE_BINARY_DIR}/generated/studio_gui.rc PROPERTIES OBJECT_DEPENDS
     "${STUDIO_ICON};${STUDIO_FONTS}/Montserrat-SemiBold.ttf;${STUDIO_FONTS}/Montserrat-ExtraBold.ttf;${STUDIO_FONTS}/PermanentMarker-Regular.ttf")

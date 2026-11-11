@@ -346,6 +346,7 @@ namespace studio
                 {"Bottom (Deck Graphic)", "own_deckgraphic"},
                 {"Bottoms (Pants)", "own_bottom"},
                 {"Eyes", "own_custeye"},
+                {"Scalps", "own_custhairscalp"},
                 {"Eyebrows / Facial Hair", "own_custhair"},
                 {"Eyewear", "own_eyewearglasses"},
                 {"Facial Hair Color", "own_facialhaircolor"},
@@ -400,14 +401,16 @@ namespace studio
                     continue;
 
                 const std::string_view name = index->lower_name(entry);
+                const std::size_t slash = name.find_last_of('/');
+                const std::string_view leaf = slash == std::string_view::npos ? name : name.substr(slash + 1);
                 const PrefixRule *rule = nullptr;
+                // Prefer the most specific prefix where one prefix is the start of another.
                 for (const auto &candidate : rules)
                 {
-                    if (name.starts_with(candidate.prefix))
-                    {
+                    if (leaf.starts_with(candidate.prefix) &&
+                        (!rule || std::char_traits<char>::length(candidate.prefix) >
+                                      std::char_traits<char>::length(rule->prefix)))
                         rule = &candidate;
-                        break;
-                    }
                 }
                 if (!rule)
                     continue;
@@ -441,7 +444,7 @@ namespace studio
                 ++counts[category];
                 Json item = {{"item", std::string(index->name(entry))},
                              {"slot", category},
-                             {"status", "ok"},
+                             {"status", read_error.empty() ? "ok" : "fail"},
                              {"type", index->type_name(entry)},
                              {"guid", guid.string()},
                              {"prefix", rule->prefix},

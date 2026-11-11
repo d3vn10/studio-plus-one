@@ -424,8 +424,6 @@ namespace studio
                     continue;
                 if (base && is_build_kit(entry))
                     continue;
-                if (!rule && !base)
-                    continue;
                 ++matched_ebx;
                 if ((matched_ebx % 100) == 0)
                     c.progress(-1, "Reading cosmetic EBX data: " + std::to_string(matched_ebx));

@@ -413,7 +413,8 @@ namespace studio
             };
             std::vector<Decoded> decoded_assets;
             std::unordered_map<std::string, std::size_t> by_name;
-            std::size_t matched_ebx = 0, decoded_count = 0;
+            std::size_t matched_ebx = 0, decoded_count = 0, failed_ebx = 0;
+            std::string first_read_error;
             c.progress(-1, "Finding base items and cosmetic assets in the native index");
 
             for (const auto &entry : index->entries)
@@ -436,11 +437,11 @@ namespace studio
                 item.base = base;
                 try
                 {
-                    // Keep only the imported asset names needed for grouping. Retaining the full
-                    // decoded JSON for every matched EBX makes memory use grow with the whole catalog.
-                    const Json ebx = native::ebx_json(*index, entry, *files, {});
+                    // The catalog only needs the import table. Do not serialize up to 200
+                    // instances and their fields for every cosmetic EBX.
+                    const Json imports = native::ebx_imports(*index, entry, *files);
                     std::set<std::string> seen;
-                    for (const auto &import : ebx.value("imports", Json::array()))
+                    for (const auto &import : imports)
                     {
                         const auto target = import.value("asset", "");
                         if (!target.empty() && seen.insert(target).second)
@@ -451,6 +452,9 @@ namespace studio
                 catch (const std::exception &error)
                 {
                     item.error = error.what();
+                    ++failed_ebx;
+                    if (first_read_error.empty())
+                        first_read_error = item.error;
                 }
                 by_name.emplace(name_key(index->name(entry)), decoded_assets.size());
                 decoded_assets.push_back(std::move(item));
@@ -578,6 +582,8 @@ namespace studio
             return {{"total", cosmetic_count},
                     {"matched_ebx", matched_ebx},
                     {"decoded_ebx", decoded_count},
+                    {"failed_ebx", failed_ebx},
+                    {"first_read_error", first_read_error},
                     {"index_cached", from_cache},
                     {"counts", std::move(counts)},
                     {"items", std::move(items)}};

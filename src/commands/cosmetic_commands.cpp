@@ -11,6 +11,7 @@
 #include <initializer_list>
 #include <regex>
 #include <utility>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 

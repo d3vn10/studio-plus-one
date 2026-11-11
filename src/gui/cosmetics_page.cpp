@@ -3,6 +3,7 @@
 // board deck), and NATIVE COSTUME packages. Every action is a registry command on the job system, so
 // Activity keeps the studio-plus line for each; filtering and sorting the catalog is display only.
 #include "gui/cosmetics_page.h"
+#include "gui/assets_page.h"
 
 #include "core/settings.h"
 #include "gui/app.h"
@@ -59,6 +60,7 @@ namespace studio::gui
             // browse
             std::shared_ptr<Job> list, audit, catalog;
             bool audit_taken = false;
+            bool catalog_refresh_index = false;
             std::vector<Item> items;
             std::vector<std::string> slots;
             std::string filter_text, filter_slot;
@@ -106,6 +108,11 @@ namespace studio::gui
             if (s.audit_taken || !kit::succeeded(s.catalog))
                 return;
             s.audit_taken = true;
+            if (s.catalog_refresh_index)
+            {
+                s.catalog_refresh_index = false;
+                assets_index_refreshed();
+            }
             s.items.clear();
             std::set<std::string> slots;
             const Json r = kit::result(s.catalog);
@@ -353,7 +360,8 @@ namespace studio::gui
             ImGui::SameLine();
             if (ImGui::Button("RELOAD"))
             {
-                s.catalog = kit::run("cosmetic", "catalog", Json::object());
+                s.catalog_refresh_index = true;
+                s.catalog = kit::run("cosmetic", "catalog", {{"refresh", true}});
                 s.audit_taken = false;
                 s.items.clear();
             }
@@ -1003,6 +1011,21 @@ namespace studio::gui
         g_cos.mesh = mesh;
         read_mesh();
         app.page = page::cosmetics;
+    }
+
+    void cosmetics_asset_index_refreshed()
+    {
+        auto &s = g_cos;
+        if (!s.started)
+            return;
+
+        if (s.catalog && kit::running(s.catalog))
+            s.catalog->cancel = true;
+        s.catalog = kit::run("cosmetic", "catalog", Json::object());
+        s.catalog_refresh_index = false;
+        s.audit_taken = false;
+        s.items.clear();
+        s.slots.clear();
     }
 
     void cosmetics_page(App &app)

@@ -4,6 +4,7 @@
 #include "core/engine.h"
 #include "core/settings.h"
 #include "native/gltf.h"
+#include "native/asset_views.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -327,6 +328,135 @@ namespace studio
             if (!lines.empty())
                 out["lines"] = lines;
             return out;
+        }
+
+        // ---- native cosmetic catalog ----------------------------------------------------------------
+        // These are the item-name prefixes used by the in-game Cosmetics categories. Match against the
+        // native asset index (which has already read the TOCs, bundle manifests and EBX file GUIDs).
+        // Own_CustHair is shared by the eyebrow and facial-hair entries, so keep it as one combined group.
+        Json run_native_cosmetic_catalog(Context &c, const Json &a)
+        {
+            struct PrefixRule
+            {
+                const char *category;
+                const char *prefix;
+            };
+            static constexpr PrefixRule rules[] = {
+                {"Body", "own_custbody"},
+                {"Bottom (Deck Graphic)", "own_deckgraphic"},
+                {"Bottoms (Pants)", "own_bottom"},
+                {"Eyes", "own_custeye"},
+                {"Eyebrows / Facial Hair", "own_custhair"},
+                {"Eyewear", "own_eyewearglasses"},
+                {"Facial Hair Color", "own_facialhaircolor"},
+                {"Costume", "own_costume"},
+                {"Griptape", "own_deckgripcolor"},
+                {"Griptape", "dev_sb_deck_gripcolor_anim"},
+                {"Grip Cutout", "own_deckgripcutout"},
+                {"Hair Color", "own_custscalp"},
+                {"Hair Color", "dev_own_custhair"},
+                {"Hats", "own_headwear"},
+                {"Hats", "own_mask"},
+                {"Heads", "own_custhead"},
+                {"Left Hand", "own_handwearglove"},
+                {"Lipstick", "own_lipcolor"},
+                {"Lipstick Style", "own_lipstyle"},
+                {"Makeup", "own_makeup"},
+                {"Moles", "own_moles"},
+                {"Mouths", "own_custmouth"},
+                {"Noses", "own_custnose"},
+                {"Outfits", "own_outfit"},
+                {"Outfits", "own_topdress"},
+                {"Playercard Backgrounds", "own_pcard_bg"},
+                {"Playercard Icons", "own_pcard_icon"},
+                {"Shoes", "own_shoe"},
+                {"Skins", "own_custskintype"},
+                {"Socks", "own_sock"},
+                {"Sticker", "own_sticker"},
+                {"Stubble", "own_stubble"},
+                {"Tattoos", "own_tattooflash"},
+                {"Tops", "own_top"},
+                {"Trucks", "own_truck"},
+                {"Voices", "own_voicetype"},
+                {"Wheels", "own_wheel"},
+                {"Wheels", "own_sb_deck_wheel"},
+                {"Scalps", "own_custhairscalp"},
+            };
+
+            const fs::path root = checked_game_root(c, a);
+            bool from_cache = false;
+            const auto index = native::build_index(c, root, false, &from_cache);
+            const auto files = native::game_files(root);
+
+            Json items = Json::array();
+            Json counts = Json::object();
+            std::size_t matched = 0;
+            std::size_t decoded = 0;
+            c.progress(-1, "Finding cosmetic items in the native asset index");
+
+            for (const auto &entry : index->entries)
+            {
+                if (entry.kind != native::Kind::ebx)
+                    continue;
+
+                const std::string_view name = index->lower_name(entry);
+                const PrefixRule *rule = nullptr;
+                for (const auto &candidate : rules)
+                {
+                    if (name.starts_with(candidate.prefix))
+                    {
+                        rule = &candidate;
+                        break;
+                    }
+                }
+                if (!rule)
+                    continue;
+
+                ++matched;
+                if ((matched % 100) == 0)
+                    c.progress(-1, "Reading cosmetic EBX references: " + std::to_string(matched));
+
+                native::fb::Guid guid;
+                guid.bytes = entry.guid;
+                Json references = Json::array();
+                std::string read_error;
+                try
+                {
+                    const Json ebx = native::ebx_json(*index, entry, *files, {});
+                    std::set<std::string> seen;
+                    for (const auto &import : ebx.value("imports", Json::array()))
+                    {
+                        const std::string target = import.value("asset", "");
+                        if (!target.empty() && seen.insert(target).second)
+                            references.push_back(target);
+                    }
+                    ++decoded;
+                }
+                catch (const std::exception &error)
+                {
+                    read_error = error.what();
+                }
+
+                const std::string category = rule->category;
+                ++counts[category];
+                Json item = {{"item", std::string(index->name(entry))},
+                             {"slot", category},
+                             {"status", "ok"},
+                             {"type", index->type_name(entry)},
+                             {"guid", guid.string()},
+                             {"prefix", rule->prefix},
+                             {"references", std::move(references)}};
+                if (!read_error.empty())
+                    item["reference_error"] = read_error;
+                items.push_back(std::move(item));
+            }
+
+            return {{"total", items.size()},
+                    {"matched_ebx", matched},
+                    {"decoded_ebx", decoded},
+                    {"index_cached", from_cache},
+                    {"counts", std::move(counts)},
+                    {"items", std::move(items)}};
         }
 
         // ---- cosmetic audit --------------------------------------------------------------------------
@@ -774,6 +904,22 @@ namespace studio
             .params = {game_root_param()},
             .examples = {"cosmetic list", "cosmetic list --json"},
             .run = run_cosmetic_list,
+        });
+
+        r.add({
+            .group = "cosmetic",
+            .name = "catalog",
+            .summary = "Find Cosmetics-tab items through the native TOC and EBX GUID index",
+            .description =
+                "Builds or loads Studio+'s native game asset index, matches the known Cosmetics-tab item-name "
+                "prefixes, and follows each matched EBX file's import GUIDs to related asset names. Unlike "
+                "'cosmetic audit', this does not call reskate_cli or test whether an item can be previewed. "
+                "Returns each item path, category, EBX type and GUID, plus resolved imported asset names. "
+                "Reads only; the first run builds the native index and can take a while.",
+            .params = {game_root_param()},
+            .examples = {"cosmetic catalog", "cosmetic catalog --json"},
+            .long_running = true,
+            .run = run_native_cosmetic_catalog,
         });
 
         r.add({

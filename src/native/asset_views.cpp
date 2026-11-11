@@ -363,6 +363,23 @@ namespace studio::native
         return out;
     }
 
+    Json ebx_imports(const AssetIndex &index, const Entry &e, const GameFiles &files)
+    {
+        const auto bytes = files.read(e.location());
+        ebx::Document doc;
+        try
+        {
+            doc = ebx::read_document(bytes);
+        }
+        catch (const std::exception &error)
+        {
+            throw Error("ebx_unreadable",
+                        "Cannot read the EBX of " + std::string(index.name(e)) + ": " + error.what(),
+                        {{"name", index.name(e)}});
+        }
+        return EbxJson(index, doc, {}).imports();
+    }
+
     // ---------------------------------------------------------------- EBX edits
 
     namespace

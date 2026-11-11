@@ -346,7 +346,6 @@ namespace studio
                 {"Bottom (Deck Graphic)", "own_deckgraphic"},
                 {"Bottoms (Pants)", "own_bottom"},
                 {"Eyes", "own_custeye"},
-                {"Scalps", "own_custhairscalp"},
                 {"Eyebrows / Facial Hair", "own_custhair"},
                 {"Eyewear", "own_eyewearglasses"},
                 {"Facial Hair Color", "own_facialhaircolor"},
@@ -441,6 +440,8 @@ namespace studio
                 }
 
                 const std::string category = rule->category;
+                if (!counts.contains(category))
+                    counts[category] = 0;
                 ++counts[category];
                 Json item = {{"item", std::string(index->name(entry))},
                              {"slot", category},

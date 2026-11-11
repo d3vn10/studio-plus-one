@@ -60,7 +60,6 @@ namespace studio::gui
             // browse
             std::shared_ptr<Job> list, audit, catalog;
             bool audit_taken = false;
-            bool catalog_refresh_index = false;
             std::vector<Item> items;
             std::vector<std::string> slots;
             std::string filter_text, filter_slot;
@@ -108,11 +107,6 @@ namespace studio::gui
             if (s.audit_taken || !kit::succeeded(s.catalog))
                 return;
             s.audit_taken = true;
-            if (s.catalog_refresh_index)
-            {
-                s.catalog_refresh_index = false;
-                assets_index_refreshed();
-            }
             s.items.clear();
             std::set<std::string> slots;
             const Json r = kit::result(s.catalog);
@@ -361,8 +355,7 @@ namespace studio::gui
             {
                 if (s.catalog && kit::running(s.catalog))
                     s.catalog->cancel = true;
-                s.catalog_refresh_index = true;
-                s.catalog = kit::run("cosmetic", "catalog", {{"refresh", true}});
+                s.catalog = kit::run("cosmetic", "catalog", Json::object());
                 s.audit_taken = false;
                 s.items.clear();
             }
@@ -1023,7 +1016,6 @@ namespace studio::gui
         if (s.catalog && kit::running(s.catalog))
             s.catalog->cancel = true;
         s.catalog = kit::run("cosmetic", "catalog", Json::object());
-        s.catalog_refresh_index = false;
         s.audit_taken = false;
         s.items.clear();
         s.slots.clear();

@@ -440,9 +440,8 @@ namespace studio
                 }
 
                 const std::string category = rule->category;
-                if (!counts.contains(category))
-                    counts[category] = 0;
-                ++counts[category];
+                const auto count = counts.value(category, 0);
+                counts[category] = count + 1;
                 Json item = {{"item", std::string(index->name(entry))},
                              {"slot", category},
                              {"status", read_error.empty() ? "ok" : "fail"},

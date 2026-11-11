@@ -95,7 +95,9 @@ namespace studio::gui
         bool board_slot(const std::string &slot)
         {
             const std::string s = kit::lower(slot);
-            return s.starts_with("board_") || s == "truck" || s == "type_boardsticker";
+            return s.starts_with("board_") || s == "truck" || s == "type_boardsticker" ||
+                   s == "bottom (deck graphic)" || s == "griptape" || s == "grip cutout" || s == "trucks" ||
+                   s == "wheels" || s == "sticker";
         }
 
         void take_audit()
@@ -462,12 +464,12 @@ namespace studio::gui
                     if (ImGui::Button("REPLACE ITS MESH"))
                     {
                         const std::string slot = kit::lower(sel->slot);
-                        s.mesh = slot == "truck"                           ? truck_mesh
-                                 : slot.find("wheel") != std::string::npos ? wheel_mesh
-                                                                           : deck_mesh;
+                        s.mesh = (slot == "truck" || slot == "trucks") ? truck_mesh
+                                 : slot == "wheels" || slot.find("wheel") != std::string::npos ? wheel_mesh
+                                                                                               : deck_mesh;
                         s.view = View::replace;
                         read_mesh();
-                        if (slot == "truck")
+                        if (slot == "truck" || slot == "trucks")
                         {
                             s.own_mesh_for = kit::lower(kit::leaf(sel->item));
                             s.own_mesh = kit::run("mesh", "find", {{"text", s.own_mesh_for}});

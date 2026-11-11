@@ -406,7 +406,6 @@ namespace studio
             struct Decoded
             {
                 const native::Entry *entry = nullptr;
-                Json ebx;
                 std::vector<std::string> imports;
                 std::string error;
                 const PrefixRule *rule = nullptr;
@@ -437,9 +436,11 @@ namespace studio
                 item.base = base;
                 try
                 {
-                    item.ebx = native::ebx_json(*index, entry, *files, {});
+                    // Keep only the imported asset names needed for grouping. Retaining the full
+                    // decoded JSON for every matched EBX makes memory use grow with the whole catalog.
+                    const Json ebx = native::ebx_json(*index, entry, *files, {});
                     std::set<std::string> seen;
-                    for (const auto &import : item.ebx.value("imports", Json::array()))
+                    for (const auto &import : ebx.value("imports", Json::array()))
                     {
                         const auto target = import.value("asset", "");
                         if (!target.empty() && seen.insert(target).second)

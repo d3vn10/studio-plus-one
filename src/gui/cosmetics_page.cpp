@@ -359,6 +359,8 @@ namespace studio::gui
             ImGui::SameLine();
             if (ImGui::Button("RELOAD"))
             {
+                if (s.catalog && kit::running(s.catalog))
+                    s.catalog->cancel = true;
                 s.catalog_refresh_index = true;
                 s.catalog = kit::run("cosmetic", "catalog", {{"refresh", true}});
                 s.audit_taken = false;

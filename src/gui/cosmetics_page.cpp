@@ -415,7 +415,7 @@ namespace studio::gui
                                   it.slot.c_str());
                     if (it.status != "ok")
                     {
-                        const std::string mark = "NO PREVIEW";
+                        const std::string mark = "READ FAILED";
                         badge(draw,
                               ImVec2(at.x + width - badge_width(mark) - S(8), at.y + S(12)),
                               mark,
@@ -447,10 +447,18 @@ namespace studio::gui
                     field("EBX TYPE", sel->details.value("type", ""));
                     field("FILE GUID", sel->details.value("guid", ""));
                     field("MATCHED PREFIX", sel->details.value("prefix", ""));
-                    const Json references = sel->details.value("references", Json::array());
-                    field("IMPORTED ASSETS", std::to_string(references.size()));
-                    for (const auto &reference : references)
-                        ImGui::BulletText("%s", reference.get<std::string>().c_str());
+                    const Json assets = sel->details.value("assets", Json::array());
+                    field("GROUP ASSETS", std::to_string(assets.size()));
+                    for (const auto &asset : assets)
+                    {
+                        const std::string name = asset.value("name", "");
+                        const std::string type = asset.value("type", "");
+                        ImGui::BulletText("%s", kit::leaf(name).c_str());
+                        if (!type.empty() && ImGui::IsItemHovered())
+                            ImGui::SetTooltip("%s\\n%s", name.c_str(), type.c_str());
+                    }
+                    if (sel->details.value("fallback", false))
+                        kit::muted("No DelMarBaseItemAsset was found linking this EBX. Showing it as a standalone fallback.");
                 }
                 else
                 {

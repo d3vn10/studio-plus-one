@@ -303,7 +303,11 @@ namespace studio::gui
             }
             field("MATCHED ITEMS", kit::thousands(r.value("total", 0LL)));
             field("EBX DECODED", kit::thousands(r.value("decoded_ebx", 0LL)));
+            field("EBX READ FAILED", kit::thousands(r.value("failed_ebx", 0LL)));
             field("INDEX", r.value("index_cached", false) ? "Cached" : "Built / refreshed");
+            const std::string first_error = r.value("first_read_error", "");
+            if (!first_error.empty())
+                ImGui::TextWrapped("First EBX read error: %s", first_error.c_str());
         }
 
         void browse_view()

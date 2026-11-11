@@ -455,7 +455,7 @@ namespace studio::gui
                         const std::string type = asset.value("type", "");
                         ImGui::BulletText("%s", kit::leaf(name).c_str());
                         if (!type.empty() && ImGui::IsItemHovered())
-                            ImGui::SetTooltip("%s\\n%s", name.c_str(), type.c_str());
+                            ImGui::SetTooltip("%s\n%s", name.c_str(), type.c_str());
                     }
                     if (sel->details.value("fallback", false))
                         kit::muted("No DelMarBaseItemAsset was found linking this EBX. Showing it as a standalone fallback.");

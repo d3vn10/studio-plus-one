@@ -363,7 +363,8 @@ namespace studio
 
             const fs::path root = checked_game_root(c, a);
             bool from_cache = false;
-            const auto index = native::build_index(c, root, false, &from_cache);
+            const bool refresh_index = a.value("refresh", false);
+            const auto index = native::build_index(c, root, refresh_index, &from_cache);
             const auto files = native::game_files(root);
 
             auto prefix_for = [&](const native::Entry &entry) -> const PrefixRule *
@@ -1033,12 +1034,13 @@ namespace studio
             .name = "catalog",
             .summary = "Find Cosmetics-tab items through the native TOC and EBX GUID index",
             .description =
-                "Builds or loads Studio+'s native game asset index, matches the known Cosmetics-tab item-name "
-                "prefixes, and follows each matched EBX file's import GUIDs to related asset names. Unlike "
-                "'cosmetic audit', this does not call reskate_cli or test whether an item can be previewed. "
-                "Returns each item path, category, EBX type and GUID, plus resolved imported asset names. "
-                "Reads only; the first run builds the native index and can take a while.",
-            .params = {game_root_param()},
+                "Loads the shared native game asset index, matches the known Cosmetics-tab item-name prefixes, "
+                "and follows EBX imports to related asset names. Pass --refresh to rebuild the shared index first. "
+                "Unlike 'cosmetic audit', this does not call reskate_cli or test previewability. Reads only.",
+            .params = {
+                {"refresh", ParamType::Boolean, "Rebuild the shared game asset index before scanning cosmetics", false, false, {}, Json(false)},
+                game_root_param(),
+            },
             .examples = {"cosmetic catalog", "cosmetic catalog --json"},
             .long_running = true,
             .run = run_native_cosmetic_catalog,

@@ -389,8 +389,10 @@ namespace studio
                 const std::string type = lower(index->type_name(entry));
                 return name.find("buildkit") != std::string::npos ||
                        name.find("build_kit") != std::string::npos ||
+                       name.find("build-kit") != std::string::npos ||
                        type.find("buildkit") != std::string::npos ||
-                       type.find("build_kit") != std::string::npos;
+                       type.find("build_kit") != std::string::npos ||
+                       type.find("build-kit") != std::string::npos;
             };
             auto name_key = [](std::string_view name)
             {
@@ -422,7 +424,7 @@ namespace studio
                 const bool base = is_base_item(entry);
                 if (!rule && !base)
                     continue;
-                if (base && is_build_kit(entry))
+                if (is_build_kit(entry))
                     continue;
                 ++matched_ebx;
                 if ((matched_ebx % 100) == 0)

@@ -25,6 +25,8 @@ namespace studio::native
         long long max_array = 512;         // longer arrays end with {"$more": n}
     };
     Json ebx_json(const AssetIndex &index, const Entry &e, const GameFiles &files, const EbxOptions &options);
+    // Reads only the EBX import table, without serializing instance fields. Used by catalog scans.
+    Json ebx_imports(const AssetIndex &index, const Entry &e, const GameFiles &files);
 
     // One edit: a field path ("Name", "[2].Transform.trans.x", "Items[0]") and the new value as text.
     struct EbxEdit

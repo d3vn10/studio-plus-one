@@ -383,6 +383,22 @@ namespace studio
             {
                 return lower(index->type_name(entry)).find("delmarbaseitemasset") != std::string::npos;
             };
+            auto is_build_kit = [&](const native::Entry &entry)
+            {
+                const std::string name = lower(std::string(index->name(entry)));
+                const std::string type = lower(index->type_name(entry));
+                return name.find("buildkit") != std::string::npos ||
+                       name.find("build_kit") != std::string::npos ||
+                       type.find("buildkit") != std::string::npos ||
+                       type.find("build_kit") != std::string::npos;
+            };
+            auto name_key = [](std::string_view name)
+            {
+                std::string key(name);
+                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch)
+                               { return static_cast<char>(std::tolower(ch)); });
+                return key;
+            };
 
             struct Decoded
             {
@@ -404,6 +420,10 @@ namespace studio
                     continue;
                 const auto *rule = prefix_for(entry);
                 const bool base = is_base_item(entry);
+                if (!rule && !base)
+                    continue;
+                if (base && is_build_kit(entry))
+                    continue;
                 if (!rule && !base)
                     continue;
                 ++matched_ebx;
@@ -430,7 +450,7 @@ namespace studio
                 {
                     item.error = error.what();
                 }
-                by_name.emplace(std::string(index->name(entry)), decoded_assets.size());
+                by_name.emplace(name_key(index->name(entry)), decoded_assets.size());
                 decoded_assets.push_back(std::move(item));
             }
 
@@ -441,7 +461,7 @@ namespace studio
                 // Base-item names are not guaranteed to use the cosmetic prefix. Infer from directly
                 // referenced category-prefixed EBXs when possible; otherwise preserve the unknown value.
                 for (const auto &name : item.imports)
-                    if (const auto found = by_name.find(name); found != by_name.end())
+                    if (const auto found = by_name.find(name_key(name)); found != by_name.end())
                         if (const auto *rule = decoded_assets[found->second].rule)
                             return std::string(rule->category);
                 return std::string("Uncategorized");
@@ -459,21 +479,37 @@ namespace studio
                 if (!base.base)
                     continue;
                 const std::string base_name(index->name(*base.entry));
+                const std::string base_key = name_key(base_name);
                 Json assets = Json::array();
                 std::set<std::string> asset_names;
                 asset_names.insert(base_name);
+
+                // Keep the base item's direct imports and one additional EBX-reference level. Some
+                // item records point to a wrapper EBX which owns the thumbnail and large thumbnail.
+                auto add_linked_assets = [&](const std::string &start)
+                {
+                    const auto found = by_name.find(name_key(start));
+                    if (found == by_name.end())
+                        return;
+                    const auto &linked = decoded_assets[found->second];
+                    const std::string linked_name(index->name(*linked.entry));
+                    asset_names.insert(linked_name);
+                    for (const auto &child_name : linked.imports)
+                        if (by_name.contains(name_key(child_name)))
+                            asset_names.insert(std::string(index->name(*decoded_assets[by_name.at(name_key(child_name))].entry)));
+                };
                 for (const auto &name : base.imports)
-                    if (by_name.contains(name))
-                        asset_names.insert(name);
+                    add_linked_assets(name);
                 for (const auto &candidate : decoded_assets)
                     if (candidate.rule &&
-                        std::find(candidate.imports.begin(), candidate.imports.end(), base_name) != candidate.imports.end())
-                        asset_names.insert(std::string(index->name(*candidate.entry)));
+                        std::any_of(candidate.imports.begin(), candidate.imports.end(),
+                                    [&](const std::string &name) { return name_key(name) == base_key; }))
+                        add_linked_assets(std::string(index->name(*candidate.entry)));
 
                 for (const auto &name : asset_names)
                 {
-                    assigned.insert(name);
-                    const auto found = by_name.find(name);
+                    assigned.insert(name_key(name));
+                    const auto found = by_name.find(name_key(name));
                     if (found == by_name.end())
                         continue;
                     const auto &asset = decoded_assets[found->second];
@@ -511,7 +547,7 @@ namespace studio
             // standalone fallback records. This makes incomplete or older asset sets visible.
             for (const auto &asset : decoded_assets)
             {
-                if (!asset.rule || assigned.contains(std::string(index->name(*asset.entry))))
+                if (!asset.rule || assigned.contains(name_key(index->name(*asset.entry))))
                     continue;
                 native::fb::Guid guid;
                 guid.bytes = asset.entry->guid;
